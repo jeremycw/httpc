@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <ev.h>
+#include <unistd.h>
 #include "http_parser.h"
 #include "recv_all.h"
 #include "http_server.h"
@@ -40,9 +41,14 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
     return;
   }
 
+  printf("try: %d on %d\n", con->buffer_size, watcher->fd);
   int read = recv_all(watcher->fd, &con->buffer, con->offset, &con->buffer_size);
+  printf("read: %d\n", read);
 
   if (read == 0) {
+    //printf("closing\n");
+    //close(watcher->fd);
+    //perror("shutdown");
     ev_io_stop(loop, watcher);
     free(con->buffer);
     free(con);
@@ -100,6 +106,7 @@ void read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
   }
 
   if (con->state == DONE) {
+    printf("DONE\n");
     free(con->buffer);
     con->buffer = malloc(BUFFER_SIZE);
     con->buffer_size = BUFFER_SIZE;

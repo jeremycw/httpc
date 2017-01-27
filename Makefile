@@ -1,6 +1,6 @@
 OBJS=http_parser.o http_server.o longpoll.o recv_all.o http_response.o
 CC=clang
-CFLAGS+=-g -Wall -Wextra -Werror -std=c99
+CFLAGS+=-O3 -Wall -Wextra -Werror -std=c99
 LFLAGS+=-lev
 
 longpoll: $(OBJS)
