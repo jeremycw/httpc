@@ -104,11 +104,12 @@ void http_response_send(http_response_t* response) {
 void file_read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
   (void)loop;
   http_response_t* response = (http_response_t*)watcher->data;
+  if (response->state == SENDING_HEADERS) return;
   if (EV_ERROR & revents) {
     perror("got invalid event");
     return;
   }
-  response->send_length = read(watcher->fd, response->send_buffer, 1024);
+  response->send_length = read(watcher->fd, response->send_buffer, 2048);
   response->state = SENDING_BODY;
   if (response->send_length < 0) {
     perror("file read error");
@@ -135,10 +136,17 @@ void socket_write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
 
   time_t rawtime;
   struct tm * timeinfo;
+  int fd;
   printf("%d) WRITE READY: %d\n", watcher->fd, response->state);
 next:
   switch (response->state) {
     case SENDING_HEADERS:
+      fd = open(response->filepath, O_RDONLY);
+      int flags = fcntl(fd, F_GETFL, 0);
+      fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+      struct stat stat;
+      fstat(fd, &stat);
+      response->content_length = stat.st_size;
       time(&rawtime);
       timeinfo = localtime(&rawtime);
       char* buf;
@@ -154,9 +162,14 @@ next:
       send(response->socket, buf, len, 0);
       free(buf);
       perror("send header error");
-      response->send_buffer = malloc(1024);
-      printf("allocated: %p\n", response->send_buffer);
+      response->send_buffer = malloc(2048);
       response->state = SENDING_BODY;
+
+      struct ev_io *file_watcher = malloc(sizeof(struct ev_io));
+      file_watcher->data = response;
+      printf("allocated: %p\n", response->send_buffer);
+      ev_io_init(file_watcher, file_read_cb, fd, EV_READ);
+      ev_io_start(response->loop, file_watcher);
       break;
 
     case SENDING_BODY:
@@ -189,19 +202,9 @@ next:
 }
 
 void http_response_send_file(http_response_t* response, const char* path) {
-  int fd = open(path, O_RDONLY);
-  int flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  struct stat stat;
-  fstat(fd, &stat);
-  response->content_length = stat.st_size;
-
-  struct ev_io *file_watcher = malloc(sizeof(struct ev_io));
-  file_watcher->data = response;
+  response->filepath = path;
   struct ev_io *sock_watcher = malloc(sizeof(struct ev_io));
   sock_watcher->data = response;
-  ev_io_init(file_watcher, file_read_cb, fd, EV_READ);
-  ev_io_start(response->loop, file_watcher);
   printf("registering watcher for %d\n", response->socket);
   ev_io_init(sock_watcher, socket_write_cb, response->socket, EV_WRITE);
   ev_io_start(response->loop, sock_watcher);

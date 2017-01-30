@@ -18,6 +18,7 @@ typedef struct {
   char* send_buffer;
   int send_length;
   int sent_bytes;
+  const char* filepath;
 } http_response_t;
 
 void http_response_send(http_response_t* response);
