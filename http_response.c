@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include <ev.h>
 #include <unistd.h>
 #include <errno.h>
+#include <libdill.h>
 #include "http_response.h"
 
 char* status_text[] = {
@@ -96,126 +96,14 @@ void http_response_send(http_response_t* response) {
       response->content_length,
       response->content);
 
-  send(response->socket, buf, len, 0);
+  bsend(response->dill_handle, buf, len, -1);
   free(buf);
-  free(response);
 }
 
-void file_read_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-  (void)loop;
-  http_response_t* response = (http_response_t*)watcher->data;
-  if (response->state == SENDING_HEADERS) return;
-  if (EV_ERROR & revents) {
-    perror("got invalid event");
-    return;
-  }
-  response->send_length = read(watcher->fd, response->send_buffer, 2048);
-  response->state = SENDING_BODY;
-  if (response->send_length < 0) {
-    perror("file read error");
-    printf("read buffer: %p\n", response->send_buffer);
-  }
-  printf("%d) read from file: %d\n", watcher->fd, response->send_length);
-
-  if (response->send_length == 0) {
-    ev_io_stop(loop, watcher);
-    close(watcher->fd);
-    free(watcher);
-    return;
-  }
-
-}
-
-void socket_write_cb(struct ev_loop *loop, struct ev_io *watcher, int revents) {
-  (void)loop;
-  http_response_t* response = (http_response_t*)watcher->data;
-  if (EV_ERROR & revents) {
-    perror("got invalid event");
-    return;
-  }
-
-  time_t rawtime;
-  struct tm * timeinfo;
-  int fd;
-  printf("%d) WRITE READY: %d\n", watcher->fd, response->state);
-next:
-  switch (response->state) {
-    case SENDING_HEADERS:
-      fd = open(response->filepath, O_RDONLY);
-      int flags = fcntl(fd, F_GETFL, 0);
-      fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-      struct stat stat;
-      fstat(fd, &stat);
-      response->content_length = stat.st_size;
-      time(&rawtime);
-      timeinfo = localtime(&rawtime);
-      char* buf;
-      int len = asprintf(
-          &buf,
-          HEADER_TEMPLATE,
-          response->status_code,
-          status_text[response->status_code],
-          asctime(timeinfo),
-          response->content_length);
-      printf("%s\n", buf);
-      errno = 0;
-      send(response->socket, buf, len, 0);
-      free(buf);
-      perror("send header error");
-      response->send_buffer = malloc(2048);
-      response->state = SENDING_BODY;
-
-      struct ev_io *file_watcher = malloc(sizeof(struct ev_io));
-      file_watcher->data = response;
-      printf("allocated: %p\n", response->send_buffer);
-      ev_io_init(file_watcher, file_read_cb, fd, EV_READ);
-      ev_io_start(response->loop, file_watcher);
-      break;
-
-    case SENDING_BODY:
-      errno = 0;
-      send(response->socket, response->send_buffer, response->send_length, 0);
-      response->sent_bytes += response->send_length;
-      if (response->sent_bytes == response->content_length) {
-        response->state = SENDING_CLEANUP;
-        goto next;
-      } else {
-        printf("pausing after: %d/%d\n", response->sent_bytes, response->content_length);
-        response->state = SENDING_PAUSED;
-      }
-      perror("send error");
-      break;
-
-    case SENDING_CLEANUP:
-      printf("%d) releasing write watcher\n", watcher->fd);
-      printf("freeing: %p\n", response->send_buffer);
-      free(response->send_buffer);
-      ev_io_stop(loop, watcher);
-      close(watcher->fd);
-      free(watcher);
-      free(response);
-      break;
-
-    case SENDING_PAUSED:
-      break;
-  }
-}
-
-void http_response_send_file(http_response_t* response, const char* path) {
-  response->filepath = path;
-  struct ev_io *sock_watcher = malloc(sizeof(struct ev_io));
-  sock_watcher->data = response;
-  printf("registering watcher for %d\n", response->socket);
-  ev_io_init(sock_watcher, socket_write_cb, response->socket, EV_WRITE);
-  ev_io_start(response->loop, sock_watcher);
-  response->state = SENDING_HEADERS;
-}
-
-void http_response_init(http_response_t* response, struct ev_loop* loop,  int socket) {
+void http_response_init(http_response_t* response, int dill_handle) {
   memset(response, 0, sizeof(http_response_t));
-  response->socket = socket;
+  response->dill_handle = dill_handle;
   response->status_code = 200;
-  response->loop = loop;
 }
 
 void http_response_set_status(http_response_t* response, int status_code) {
