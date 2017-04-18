@@ -7,17 +7,18 @@
 
 void http_request_cb(http_request_t* req, http_response_t* res) {
   (void)req;
-  char* buf = malloc(256 * req->header_count);
-  int index = 0;
-  for (int i = 0; i < req->header_count; i++) {
-    int len = strlen(req->headers[i]);
-    memcpy(buf+index, req->headers[i], len);
-    index += len+1;
-    buf[index-1] = '\n';
-  }
-  http_response_set_content(res, buf, index);
-  http_response_send(res);
-  free(buf);
+  //char* buf = malloc(256 * req->header_count);
+  //int index = 0;
+  //for (int i = 0; i < req->header_count; i++) {
+  //  int len = strlen(req->headers[i]);
+  //  memcpy(buf+index, req->headers[i], len);
+  //  index += len+1;
+  //  buf[index-1] = '\n';
+  //}
+  //http_response_set_content(res, buf, index);
+  //http_response_send(res);
+  //free(buf);
+  http_response_send_file(res, "website.html");
 }
 
 int main() {

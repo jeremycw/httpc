@@ -1,11 +1,7 @@
 #include <time.h>
-#include <netinet/in.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
 #include <libdill.h>
 #include "http_response.h"
 
@@ -100,10 +96,11 @@ void http_response_send(http_response_t* response) {
   free(buf);
 }
 
-void http_response_init(http_response_t* response, int dill_handle) {
+void http_response_init(http_response_t* response, async_ctx_t* async_ctx, int dill_handle) {
   memset(response, 0, sizeof(http_response_t));
   response->dill_handle = dill_handle;
   response->status_code = 200;
+  response->async_ctx = async_ctx;
 }
 
 void http_response_set_status(http_response_t* response, int status_code) {
@@ -113,4 +110,13 @@ void http_response_set_status(http_response_t* response, int status_code) {
 void http_response_set_content(http_response_t* response, const char* content, int content_length) {
   response->content = content;
   response->content_length = content_length;
+}
+
+void http_response_send_file(http_response_t* response, const char* path) {
+  char* ptr;
+  int len;
+  async_read_file(response->async_ctx, path, &ptr, &len);
+  http_response_set_content(response, ptr, len);
+  http_response_send(response);
+  free(ptr);
 }
