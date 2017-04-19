@@ -6,7 +6,7 @@
 
 typedef struct {
   char busy[32];
-  int handles[32][2];
+  int handles[32];
   int worker_count;
 } async_ctx_t;
 

@@ -1,10 +1,13 @@
 OBJS=http_server.o longpoll.o http_response.o async.o
 CC=clang
-CFLAGS+=-g -Wall -Wextra -Werror
+CFLAGS+=-O3 -Wall -Wextra -Werror
 LFLAGS+=-ldill
 
-longpoll: $(OBJS)
+longpoll: $(OBJS) httpc-worker
 	$(CC) $(OBJS) $(LFLAGS) -o longpoll
+
+httpc-worker: worker.c
+	$(CC) $(CFLAGS) worker.c $(LFLAGS) -o httpc-worker
 
 # pull in dependency info for *existing* .o files
 -include $(OBJS:.o=.d)
@@ -15,4 +18,4 @@ longpoll: $(OBJS)
 	@$(CC) -MM $(CFLAGS) $*.c > $*.d
 
 clean:
-	@rm *.o *.d longpoll
+	@rm *.o *.d longpoll httpc-worker
