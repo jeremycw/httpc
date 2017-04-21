@@ -5,7 +5,6 @@
 #include <assert.h>
 #include "http_server.h"
 #include "http_response.h"
-#include "async.h"
 
 #define BUFFER_SIZE 256
 #define CONTENT_LENGTH "Content-Length"
@@ -22,7 +21,7 @@ char parser_next_char(parser_t* parser) {
     return parser->c;
   } else {
     char c;
-    brecv(parser->s, &c, 1, -1);
+    brecv(parser->s, &c, 1, now() + 60000);
     return c;
   }
 }
@@ -137,7 +136,7 @@ coroutine void http_session(http_server_t* server, int s) {
       request.body[request.body_length] = '\0';
     }
     http_response_t response;
-    http_response_init(&response, server->async_ctx, s);
+    http_response_init(&response, s);
     //Call the application callback
     server->request_cb(&request, &response);
     http_request_free(&request);
@@ -145,10 +144,7 @@ coroutine void http_session(http_server_t* server, int s) {
 }
 
 int http_server_listen(http_server_t* server, void (*f)(http_request_t*, http_response_t*), int port) {
-  async_ctx_t async_ctx;
-  async_init(&async_ctx, 16);
   server->request_cb = f;
-  server->async_ctx = &async_ctx;
   struct ipaddr addr;
   int rc = ipaddr_local(&addr, NULL, port, 0);
   assert(rc == 0);

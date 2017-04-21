@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <libdill.h>
+#include <aio.h>
+#include <fcntl.h>
 #include "http_response.h"
 
 char* status_text[] = {
@@ -96,11 +98,10 @@ void http_response_send(http_response_t* response) {
   free(buf);
 }
 
-void http_response_init(http_response_t* response, async_ctx_t* async_ctx, int dill_handle) {
+void http_response_init(http_response_t* response, int dill_handle) {
   memset(response, 0, sizeof(http_response_t));
   response->dill_handle = dill_handle;
   response->status_code = 200;
-  response->async_ctx = async_ctx;
 }
 
 void http_response_set_status(http_response_t* response, int status_code) {
@@ -112,10 +113,33 @@ void http_response_set_content(http_response_t* response, const char* content, i
   response->content_length = content_length;
 }
 
+int read_file(const char* path, char** ptr, int* len) {
+  int fd = open(path, O_RDONLY);
+  int chunk_size = 2048, err, ret;
+  *ptr = NULL;
+  *len = 0;
+  struct aiocb aiocb;
+  do {
+    memset(&aiocb, 0, sizeof(aiocb));
+    *ptr = realloc(*ptr, chunk_size + *len);
+    aiocb.aio_fildes = fd;
+    aiocb.aio_nbytes = chunk_size;
+    aiocb.aio_buf = *ptr + *len;
+    aiocb.aio_offset = *len;
+    aio_read(&aiocb);
+    while ((err = aio_error(&aiocb)) == EINPROGRESS) yield();
+    ret = aio_return(&aiocb);
+    *len += ret;
+  } while (ret == chunk_size);
+  close(fd);
+  return 0;
+}
+
+
 void http_response_send_file(http_response_t* response, const char* path) {
   char* ptr;
   int len;
-  async_read_file(response->async_ctx, path, &ptr, &len);
+  read_file(path, &ptr, &len);
   http_response_set_content(response, ptr, len);
   http_response_send(response);
   free(ptr);
