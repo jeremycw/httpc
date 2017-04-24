@@ -56,41 +56,46 @@ void parse_request_line(parser_t* parser, http_request_t* request) {
 
 #define eat_white_space() \
     do { \
-      while ((c = parser_next_char(parser)) == ' ' || c == '\t') { store_char(); } \
+      while ((c = parser_next_char(parser)) == ' ' || c == '\t'); \
     } while(0)
 
-#define store_char() \
+#define store_char(buf) \
   assert(i < BUFFER_SIZE); \
   buf[i++] = c
+
+#define eat_separator() \
+  do { \
+    if (c == ':') { \
+      eat_white_space(); \
+    } else if (c == ' ' || c == '\t') { \
+      eat_white_space(); \
+      if (c == ':') { \
+        eat_white_space(); \
+      } \
+    } \
+  } while (0)
 
 void parse_header(parser_t* parser, http_request_t* request) {
   int i;
   char c;
-  char* buf = malloc(BUFFER_SIZE);
-  request->headers[request->header_count++] = buf;
+  http_header_t* h = malloc(sizeof(http_header_t));
+  request->headers[request->header_count++] = h;
   for (i = 0; (c = parser_next_char(parser)) == CONTENT_LENGTH[i]; ) {
-    store_char();
+    store_char(h->key);
   }
   //If header is Content-Length
   if (i == (int)sizeof(CONTENT_LENGTH)-1) {
-    store_char();
-    if (c == ':') {
-      eat_white_space();
-    } else if (c == ' ' || c == '\t') {
-      eat_white_space();
-      if (c == ':') {
-        store_char();
-        eat_white_space();
-      }
-    }
+    h->key[i] = '\0';
+    eat_separator();
+    i = 0;
     //Get body length from Content-Length header
     do {
-      store_char();
+      store_char(h->value);
       request->body_length *= 10;
       request->body_length += c - '0';
     } while ((c = parser_next_char(parser)) >= '0' && c <= '9');
-    store_char();
-    buf[i-1] = '\0';
+    store_char(h->value);
+    h->value[i-1] = '\0';
     if (c != '\r' && c != '\n') {
       eat_white_space();
     }
@@ -99,20 +104,15 @@ void parse_header(parser_t* parser, http_request_t* request) {
     }
   //If not Content-Length just read in line
   } else {
-    store_char();
-    read_to_crlf(parser, buf+i, BUFFER_SIZE-i);
+    do {
+      store_char(h->key);
+    } while ((c = parser_next_char(parser)) != ' ' && c != '\t' && c != ':');
+    h->key[i] = '\0';
+    eat_separator();
+    i = 0;
+    store_char(h->value);
+    read_to_crlf(parser, h->value+1, BUFFER_SIZE-i);
   }
-}
-
-void http_request_free(http_request_t* request) {
-  free(request->request_line);
-  if (request->body) {
-    free(request->body);
-  }
-  for (int i = 0; i < request->header_count; i++) {
-    free(request->headers[i]);
-  }
-  memset(request, 0, sizeof(http_request_t));
 }
 
 coroutine void http_session(http_server_t* server, int s) {

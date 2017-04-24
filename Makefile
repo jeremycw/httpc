@@ -1,4 +1,4 @@
-OBJS=http_server.o longpoll.o http_response.o
+OBJS=http_server.o longpoll.o http_response.o http_request.o
 CC=clang
 CFLAGS+=-g -Wall -Wextra -Werror
 LFLAGS+=-ldill
