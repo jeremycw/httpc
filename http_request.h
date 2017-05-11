@@ -3,9 +3,14 @@
 
 #include <unistd.h>
 
+#define INITIAL_HEADER_KEY_BUF_SIZE 32
+#define INITIAL_HEADER_VALUE_BUF_SIZE 256
+
 typedef struct {
-  char key[32];
-  char value[256];
+  char* key;
+  char* value;
+  int ksize;
+  int vsize;
 } http_header_t;
 
 typedef struct {
@@ -19,5 +24,6 @@ typedef struct {
 time_t http_request_if_modified_since(http_request_t* request);
 int http_request_connection_close(http_request_t* request);
 void http_request_free(http_request_t* request);
+http_header_t* http_request_alloc_header(http_request_t* request);
 
 #endif
