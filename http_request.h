@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #define INITIAL_HEADER_KEY_BUF_SIZE 32
-#define INITIAL_HEADER_VALUE_BUF_SIZE 256
+#define INITIAL_HEADER_VALUE_BUF_SIZE 128
 
 typedef struct {
   char* key;

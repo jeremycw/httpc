@@ -51,7 +51,7 @@ void read_to_crlf(parser_t* parser, char** buf, int offset, int* size) {
 }
 
 void parse_request_line(parser_t* parser, http_request_t* request) {
-  int rl_size = 256;
+  int rl_size = 128;
   request->request_line = malloc(rl_size);
   read_to_crlf(parser, &request->request_line, 0, &rl_size);
   if (errno != 0) {
